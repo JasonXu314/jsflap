@@ -1,13 +1,17 @@
 <script lang="ts">
 	import { hotkey } from '@svelteuidev/composables';
-	import { Button, Group, NativeSelect, Title, Tooltip } from '@svelteuidev/core';
+	import { Button, Group, NativeSelect, Notification, Title, Tooltip } from '@svelteuidev/core';
 	import { onMount } from 'svelte';
+	import { flip } from 'svelte/animate';
+	import { quintOut } from 'svelte/easing';
+	import { fly } from 'svelte/transition';
 	import type { TestCase, TestCaseResult } from '../app';
 	import { Engine, MouseButton } from '../utils/engine';
 	import { Node, type NodeData } from '../utils/node';
 	import { Point } from '../utils/point';
 	import { Transition } from '../utils/transition';
 	import { Accept, Reject, SimState, type DFA, type MachineType, type NFA, type PDA, type TuringMachine } from '../utils/utils';
+	import SmallExclamation from './icons/SmallExclamation.svelte';
 	import EditNodeMenu from './menus/EditNodeMenu.svelte';
 	import EditTransitionMenu from './menus/EditTransitionMenu.svelte';
 	import CreateNodeModal from './modals/CreateNodeModal.svelte';
@@ -41,6 +45,7 @@
 		frozen: boolean = false,
 		simState: SimState | null = null,
 		testResults: TestCaseResult[] | null = null,
+		errors: Error[] = [],
 		nodeResolver: (data: NodeData) => void = () => {},
 		nodeCanceler: () => void = () => {},
 		cancelLine: () => void = () => {};
@@ -70,6 +75,7 @@
 
 	function createNode() {
 		if (engine && !frozen) {
+			cancelLine();
 			engine.createNode(async () => {
 				modalState = ModalState.CREATE_NODE;
 
@@ -112,6 +118,7 @@
 			cancelLine = () => {
 				off();
 				drawingLine = false;
+				cancelLine = () => {};
 			};
 		}
 	}
@@ -175,8 +182,16 @@
 
 	function compile() {
 		if (engine) {
-			machine = engine.compile(machineType, {}, { requireAllTransitions: false });
-			frozen = true;
+			try {
+				machine = engine.compile(machineType, {}, { requireAllTransitions: false });
+				frozen = true;
+			} catch (err: unknown) {
+				if (err instanceof Error) {
+					errors = [...errors, err];
+				} else {
+					console.error(err);
+				}
+			}
 		}
 	}
 
@@ -211,6 +226,7 @@
 			simulating = false;
 			frozen = false;
 			simState = null;
+			testResults = null;
 		}
 	}
 
@@ -241,13 +257,21 @@
 
 	function runTests(evt: CustomEvent<TestCase[]>) {
 		if (engine) {
-			const cases = evt.detail;
+			try {
+				const cases = evt.detail;
 
-			testResults = cases.map((test) => {
-				const result = engine!.eval(test.input);
+				testResults = cases.map((test) => {
+					const result = engine!.eval(test.input);
 
-				return { match: test.result === result.result, extra: result.extra };
-			});
+					return { match: test.result === result.result, extra: result.extra };
+				});
+			} catch (err: unknown) {
+				if (err instanceof Error) {
+					errors = [...errors, err];
+				} else {
+					console.error(err);
+				}
+			}
 		}
 	}
 </script>
@@ -313,6 +337,15 @@
 	{simulating}
 	{simState}
 />
+<div id="notifications">
+	{#each errors as err (err)}
+		<div transition:fly={{ x: -100, y: 0, duration: 200 }} animate:flip={{ duration: 200, easing: quintOut }}>
+			<Notification title="Compilation Error" icon={SmallExclamation} color="red" on:close={() => (errors = errors.filter((e) => e !== err))}>
+				{err.message}
+			</Notification>
+		</div>
+	{/each}
+</div>
 {#key editingTransition}
 	<EditConditionsModal
 		{editingTransition}
@@ -372,5 +405,16 @@
 		margin-top: 1em;
 		margin-left: 1em;
 		border: 1px solid black;
+	}
+
+	#notifications {
+		position: absolute;
+		top: 1em;
+		right: 1em;
+		width: 400px;
+	}
+
+	#notifications div {
+		margin-bottom: 0.5em;
 	}
 </style>

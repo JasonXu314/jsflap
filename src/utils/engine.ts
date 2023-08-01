@@ -44,7 +44,7 @@ export enum MouseButton {
 
 export class Engine {
 	private readonly context: CanvasRenderingContext2D;
-	private readonly layers: Entity[][] = [];
+	private readonly layers: Entity[][] = [[], []];
 	private readonly renderEngine: RenderEngine;
 
 	private _selectedEntity: Entity | null = null;
@@ -303,6 +303,8 @@ export class Engine {
 			throw new Error('No compiled machine.');
 		}
 
+		this._validateInput(inputString);
+
 		switch (this._machine.type) {
 			case 'DFA':
 			case 'NFA': {
@@ -335,6 +337,7 @@ export class Engine {
 					if (state.final) {
 						return { result: true, extra: {} };
 					} else {
+						// TODO: resolve edge cases where epsilon transition from end node (or from any node to itself) will cause problems
 						if (timelines.length === 1) {
 							return { result: false, extra: {} };
 						} else {
@@ -1099,6 +1102,16 @@ export class Engine {
 
 		if (this._mouseDelta) {
 			this._mouseDelta = new Point();
+		}
+	}
+
+	private _validateInput(inputString: string): void {
+		if (this._machine) {
+			for (const char of inputString) {
+				if (!this._machine.alphabet.has(char)) {
+					throw new Error(`Invalid input character '${char}'`);
+				}
+			}
 		}
 	}
 

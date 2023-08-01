@@ -28,6 +28,12 @@
 			test.result = target.value === 'Accept';
 		};
 	}
+
+	$: {
+		if (!machine) {
+			testCases = [];
+		}
+	}
 </script>
 
 <svelte:window on:mousemove={move} />

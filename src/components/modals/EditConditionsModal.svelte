@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { clipboard } from '@svelteuidev/composables';
 	import { Button, CloseButton, Group, Modal, Stack, TextInput, Tooltip } from '@svelteuidev/core';
 	import { QuestionMarkCircled } from 'radix-icons-svelte';
 	import { createEventDispatcher } from 'svelte';
 	import type { Transition } from '../../utils/transition';
-	import type { MachineType } from '../../utils/utils';
+	import { EPSILON, type MachineType } from '../../utils/utils';
 	import PdaConditionInput from '../inputs/PDAConditionInput.svelte';
 	import TmConditionInput from '../inputs/TMConditionInput.svelte';
 
@@ -14,7 +15,8 @@
 	}
 
 	let conditions = editingTransition ? [...editingTransition.conditions] : [],
-		originalConditions = [...conditions];
+		originalConditions = [...conditions],
+		freeInput: HTMLInputElement;
 
 	const dispatcher = createEventDispatcher<{ close: void }>();
 
@@ -83,6 +85,9 @@
 		</Stack>
 		<Group>
 			<Button on:click={save}>Ok</Button>
+			<Tooltip label="Copy to clipboard">
+				<Button use={[[clipboard, EPSILON]]}>{EPSILON}</Button>
+			</Tooltip>
 			<Button on:click={cancel} color="red">Cancel</Button>
 		</Group>
 	</Stack>
