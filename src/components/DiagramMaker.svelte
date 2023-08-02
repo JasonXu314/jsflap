@@ -16,13 +16,15 @@
 	import EditTransitionMenu from './menus/EditTransitionMenu.svelte';
 	import CreateNodeModal from './modals/CreateNodeModal.svelte';
 	import EditConditionsModal from './modals/EditConditionsModal.svelte';
+	import EditLabelModal from './modals/EditLabelModal.svelte';
 	import MachineTestingModal from './modals/MachineTestingModal.svelte';
 
 	enum ModalState {
 		NONE,
 		CREATE_NODE,
 		EDIT_CONDITIONS,
-		UPLOAD
+		UPLOAD,
+		EDIT_LABEL
 	}
 
 	enum MenuState {
@@ -153,14 +155,22 @@
 
 	function downloadJFF(): void {
 		if (engine) {
-			const jff = engine.exportJFF(machineType, {}, { requireAllTransitions: false });
+			try {
+				const jff = engine.exportJFF(machineType, {}, { requireAllTransitions: false });
 
-			const blob = new Blob([jff]);
-			const url = URL.createObjectURL(blob);
-			const anchor = document.createElement('a');
-			anchor.href = url;
-			anchor.download = 'machine.jff';
-			anchor.click();
+				const blob = new Blob([jff]);
+				const url = URL.createObjectURL(blob);
+				const anchor = document.createElement('a');
+				anchor.href = url;
+				anchor.download = 'machine.jff';
+				anchor.click();
+			} catch (err: unknown) {
+				if (err instanceof Error) {
+					errors = [...errors, err];
+				} else {
+					console.error(err);
+				}
+			}
 		}
 	}
 
@@ -357,6 +367,16 @@
 		}}
 	/>
 {/key}
+{#key editingNode}
+	<EditLabelModal
+		{editingNode}
+		opened={modalState === ModalState.EDIT_LABEL}
+		on:close={() => {
+			modalState = ModalState.NONE;
+			editingNode = null;
+		}}
+	/>
+{/key}
 {#if menuState === MenuState.EDITING_NODE && editingNode && menuLocation}
 	<EditNodeMenu
 		{menuLocation}
@@ -372,6 +392,12 @@
 			if (engine) {
 				engine.remove(entity);
 			}
+		}}
+		on:editLabel={(evt) => {
+			const node = evt.detail;
+
+			modalState = ModalState.EDIT_LABEL;
+			editingNode = node;
 		}}
 	/>
 {:else if menuState === MenuState.EDITING_TRANSITION && editingTransition && menuLocation}
