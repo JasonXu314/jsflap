@@ -31,7 +31,7 @@
 	}
 </script>
 
-<Modal {opened} on:close={cancel} title="Edit Conditions">
+<Modal {opened} on:close={cancel} title="Rename Node">
 	<Stack>
 		<TextInput label="Node Label" bind:value={label} />
 		<Group>

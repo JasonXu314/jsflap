@@ -10,7 +10,7 @@
 	import { Node, type NodeData } from '../utils/node';
 	import { Point } from '../utils/point';
 	import { Transition } from '../utils/transition';
-	import { Accept, Reject, SimState, type DFA, type MachineType, type NFA, type PDA, type TuringMachine } from '../utils/utils';
+	import { Accept, Blowup, Reject, SimState, type DFA, type MachineType, type NFA, type PDA, type TuringMachine } from '../utils/utils';
 	import SmallExclamation from './icons/SmallExclamation.svelte';
 	import EditNodeMenu from './menus/EditNodeMenu.svelte';
 	import EditTransitionMenu from './menus/EditTransitionMenu.svelte';
@@ -271,9 +271,17 @@
 				const cases = evt.detail;
 
 				testResults = cases.map((test) => {
-					const result = engine!.eval(test.input);
+					try {
+						const result = engine!.eval(test.input);
 
-					return { match: test.result === result.result, extra: result.extra };
+						return { match: test.result === result.result, extra: result.extra };
+					} catch (err: unknown) {
+						if (err instanceof Blowup) {
+							return { match: false, extra: {} };
+						} else {
+							throw err;
+						}
+					}
 				});
 			} catch (err: unknown) {
 				if (err instanceof Error) {

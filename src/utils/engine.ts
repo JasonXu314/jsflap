@@ -6,6 +6,7 @@ import { RenderEngine } from './renderEngine';
 import { CycleSide, Transition, type DehydratedTransition } from './transition';
 import {
 	Accept,
+	Blowup,
 	ConditionError,
 	EPSILON,
 	MachineValidationError,
@@ -292,6 +293,11 @@ export class Engine {
 								}
 							}
 						});
+
+						if (!stepped) {
+							// TODO: account for NFAs
+							throw new Blowup();
+						}
 					}
 				});
 			}
@@ -362,6 +368,11 @@ export class Engine {
 							}
 						}
 					});
+
+					if (!stepped) {
+						// TODO: account for NFAs
+						throw new Blowup();
+					}
 				}
 			}
 		}

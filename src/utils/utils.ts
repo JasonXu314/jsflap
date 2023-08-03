@@ -76,6 +76,7 @@ export class SymbolError extends MachineValidationError {
 
 export class Accept {}
 export class Reject {}
+export class Blowup {}
 
 export enum SimState {
 	RUNNING,
@@ -121,3 +122,4 @@ export function serializeType(type: Exclude<MachineType, 'Auto'>): string {
 			return 'turing';
 	}
 }
+
