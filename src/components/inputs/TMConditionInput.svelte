@@ -10,7 +10,7 @@
 	$: movement = condition.split(' ')[2];
 
 	function validateCondition(): boolean {
-		return condition === '' || /. . [NRL]/.test(condition);
+		return /.? .? [NRL]/.test(condition);
 	}
 
 	function editReadSymbol(evt: CustomEvent): void {

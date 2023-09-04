@@ -11,7 +11,7 @@
 	$: actionStackSymbol = condition.split(' ')[3];
 
 	function validateCondition(): boolean {
-		return condition === '' || /. . [NPp] ./.test(condition);
+		return /.? .? [NPp] .?/.test(condition);
 	}
 
 	function editSymbol(evt: CustomEvent): void {
@@ -63,11 +63,16 @@
 			value={action}
 			data={[
 				{ label: 'Push', value: 'P' },
-				{ label: 'Pop', value: 'p' }
+				{ label: 'Pop', value: 'p' },
+				{ label: 'None', value: 'N' }
 			]}
 			on:change={editAction}
 		/>
-		<TextInput style="width: 4ch" value={actionStackSymbol} on:input={editActionSymbol} />
+		{#key action}
+			{#if action === 'P'}
+				<TextInput style="width: 4ch" value={actionStackSymbol} on:input={editActionSymbol} />
+			{/if}
+		{/key}
 	</Group>
 {:else}
 	<TextInput bind:value={condition} />

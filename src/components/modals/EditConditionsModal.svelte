@@ -79,7 +79,7 @@
 			{/each}
 			<Button
 				on:click={() => {
-					conditions = [...conditions, ''];
+					conditions = [...conditions, machineType === 'PDA' ? '  P ' : machineType === 'Turing Machine' ? '  R' : ''];
 				}}>Add Condition</Button
 			>
 		</Stack>

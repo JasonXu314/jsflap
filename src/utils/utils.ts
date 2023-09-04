@@ -37,7 +37,7 @@ export interface MachineTransition<State extends MachineState, Condition> {
 	conditions: Condition[];
 }
 
-export type PDACondition = { symbol: string; action: 'Push' | 'Pop'; readStackSymbol: string; actionStackSymbol: string };
+export type PDACondition = { symbol: string; action: 'Push' | 'Pop' | 'None'; readStackSymbol: string; actionStackSymbol: string };
 export type TMCondition = { readSymbol: string; writeSymbol: string; movement: string };
 
 export interface DFAState extends MachineState {

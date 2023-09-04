@@ -54,9 +54,7 @@ export class Engine {
 	private _mouseDelta: Point | null = null;
 	private _machine: DFA | NFA | PDA | TuringMachine | null = null;
 	private _nodeMap: Map<MachineState, Node> = new Map();
-	private _timelines: [MachineState, number][] = [];
-	private _stack: string[] = [];
-	private _tape: (string | undefined)[] = [];
+	private _timelines: [MachineState, number, (string | undefined)[]][] = [];
 	private _input = '';
 
 	private _listeners: { [K in keyof EngineEvents]: EngineEvents[K][] };
@@ -225,20 +223,16 @@ export class Engine {
 		}
 
 		if (this._machine.type === 'DFA' || this._machine.type === 'Turing Machine') {
-			this._timelines = [[this._machine.initial, 0]];
+			this._timelines = [[this._machine.initial, 0, this._machine.type === 'Turing Machine' ? inputString.split('') : []]];
 		} else {
-			this._timelines = this._machine.initial.map((state) => [state, 0]);
+			this._timelines = this._machine.initial.map((state) => [state, 0, []]);
 		}
 
 		if (this._machine.type !== 'Turing Machine') {
 			this._input = inputString;
-			this._tape = [];
 		} else {
-			this._tape = inputString.split('');
 			this._input = '';
 		}
-
-		this._stack = [];
 	}
 
 	public endSimulation(): void {
@@ -248,8 +242,6 @@ export class Engine {
 
 	public resetSimulation(): void {
 		this._input = '';
-		this._tape = [];
-		this._stack = [];
 		this._timelines = [];
 	}
 
@@ -258,6 +250,7 @@ export class Engine {
 			throw new Error('No compiled machine.');
 		}
 
+		// TODO: change to iterate on length so that new timeline generations are not immediately advanced
 		switch (this._machine.type) {
 			case 'DFA':
 			case 'NFA': {
@@ -280,15 +273,19 @@ export class Engine {
 
 						state.transitions.forEach((transition) => {
 							if (transition.conditions.includes(EPSILON)) {
-								this._timelines[i] = [transition.to, idx];
-								stepped = true;
+								if (stepped) {
+									this._timelines.push([transition.to, idx, []]);
+								} else {
+									this._timelines[i] = [transition.to, idx, []];
+									stepped = true;
+								}
 							}
 
 							if (transition.conditions.includes(character)) {
 								if (stepped) {
-									this._timelines.push([transition.to, idx + 1]);
+									this._timelines.push([transition.to, idx + 1, []]);
 								} else {
-									this._timelines[i] = [transition.to, idx + 1];
+									this._timelines[i] = [transition.to, idx + 1, []];
 									stepped = true;
 								}
 							}
@@ -296,6 +293,61 @@ export class Engine {
 
 						if (!stepped) {
 							// TODO: account for NFAs
+							throw new Blowup();
+						}
+					}
+				});
+				break;
+			}
+			case 'PDA': {
+				this._timelines.forEach(([s, idx, stack], i) => {
+					const character = this._input[idx];
+					const state = s as PDAState;
+
+					if (character === undefined) {
+						if (state.final) {
+							throw new Accept();
+						} else {
+							if (this._timelines.length === 1) {
+								throw new Reject();
+							} else {
+								this._timelines.splice(i, 1);
+							}
+						}
+					} else {
+						let stepped = false;
+
+						state.transitions.forEach((transition) => {
+							transition.conditions.forEach((condition) => {
+								if (condition.readStackSymbol === stack.at(-1) || (condition.readStackSymbol === EPSILON && stack.at(-1) === undefined)) {
+									const newStack =
+										condition.action === 'None'
+											? [...stack]
+											: condition.action === 'Pop'
+											? stack.slice(0, -1)
+											: [...stack, condition.actionStackSymbol];
+
+									if (condition.symbol === EPSILON) {
+										if (stepped) {
+											this._timelines.push([transition.to, idx, newStack]);
+										} else {
+											this._timelines[i] = [transition.to, idx, newStack];
+											stepped = true;
+										}
+									} else if (condition.symbol === character) {
+										if (stepped) {
+											this._timelines.push([transition.to, idx + 1, newStack]);
+										} else {
+											this._timelines[i] = [transition.to, idx + 1, newStack];
+											stepped = true;
+										}
+									}
+								}
+							});
+						});
+
+						if (!stepped) {
+							// TODO: account for NPDAs
 							throw new Blowup();
 						}
 					}
@@ -316,6 +368,8 @@ export class Engine {
 			case 'NFA': {
 				return this._faEval(inputString);
 			}
+			case 'PDA':
+				return this._pdaEval(inputString);
 			default:
 				return { result: false, extra: {} };
 		}
@@ -371,6 +425,75 @@ export class Engine {
 
 					if (!stepped) {
 						// TODO: account for NFAs
+						throw new Blowup();
+					}
+				}
+			}
+		}
+	}
+
+	private _pdaEval(inputString: string): EvalResult {
+		if (!this._machine) {
+			throw new Error('No compiled machine.');
+		}
+
+		if (this._machine.type !== 'PDA') {
+			throw new Error('Machine is not PDA');
+		}
+
+		const timelines: [PDAState, number, string[]][] = this._machine.initial.map((state) => [state, 0, []]);
+
+		while (true) {
+			for (let i = 0; i < timelines.length; i++) {
+				const [s, idx, stack] = timelines[i];
+				const character = inputString[idx];
+				const state = s as PDAState;
+
+				if (character === undefined) {
+					if (state.final) {
+						return { result: true, extra: { stack } };
+					} else {
+						// TODO: resolve edge cases where epsilon transition from end node (or from any node to itself) will cause problems
+						if (timelines.length === 1) {
+							return { result: false, extra: { stack } };
+						} else {
+							timelines.splice(i, 1);
+						}
+					}
+				} else {
+					let stepped = false;
+
+					state.transitions.forEach((transition) => {
+						transition.conditions.forEach((condition) => {
+							if (condition.readStackSymbol === stack.at(-1) || (condition.readStackSymbol === EPSILON && stack.at(-1) === undefined)) {
+								const newStack =
+									condition.action === 'None'
+										? [...stack]
+										: condition.action === 'Pop'
+										? stack.slice(0, -1)
+										: [...stack, condition.actionStackSymbol];
+
+								if (condition.symbol === EPSILON) {
+									if (stepped) {
+										timelines.push([transition.to, idx, newStack]);
+									} else {
+										timelines[i] = [transition.to, idx, newStack];
+										stepped = true;
+									}
+								} else if (condition.symbol === character) {
+									if (stepped) {
+										timelines.push([transition.to, idx + 1, newStack]);
+									} else {
+										timelines[i] = [transition.to, idx + 1, newStack];
+										stepped = true;
+									}
+								}
+							}
+						});
+					});
+
+					if (!stepped) {
+						// TODO: account for NPDAs
 						throw new Blowup();
 					}
 				}
@@ -536,7 +659,7 @@ export class Engine {
 					outgoingTransitions = new Map<Node, Transition[]>();
 				for (const transition of transitions) {
 					for (const condition of transition.conditions) {
-						if (!/. . [NPp] ./.test(condition)) {
+						if (!/.? .? [NPp] .?/.test(condition)) {
 							throw new ConditionError(as, condition, transition, "couldn't be parsed as a PDA condition");
 						}
 
@@ -548,11 +671,11 @@ export class Engine {
 						if (readStackSymbol.length !== 1) {
 							throw new SymbolError(as, readStackSymbol, transition, 'must be one character long');
 						}
-						if (actionStackSymbol.length !== 1) {
-							throw new SymbolError(as, actionStackSymbol, transition, 'must be one character long');
+						if (action !== 'P' && action !== 'p' && action !== 'N') {
+							throw new MachineValidationError(as, `Stack action '${action}' must be 'P' (Push), 'p' (Pop), or 'N' (None).`);
 						}
-						if (action !== 'Push' && action !== 'Pop') {
-							throw new MachineValidationError(as, `Stack action ${action} must be either 'Push' or 'Pop'.`);
+						if (action === 'P' && actionStackSymbol.length !== 1) {
+							throw new SymbolError(as, actionStackSymbol, transition, 'must be one character long');
 						}
 
 						if (!alphabet) {
@@ -854,11 +977,11 @@ export class Engine {
 				} else {
 					stackAlphabet.add(actionStackSymbol);
 				}
-				if (action !== 'Push' && action !== 'Pop') {
-					throw new MachineValidationError('PDA', `Stack action ${action} must be either 'Push' or 'Pop'.`);
+				if (action !== 'P' && action !== 'p' && action !== 'N') {
+					throw new MachineValidationError('PDA', `Stack action ${action} must be 'P' (Push), 'p' (Pop), or 'N' (None).`);
 				}
 
-				conditions.push({ symbol, readStackSymbol, action, actionStackSymbol });
+				conditions.push({ symbol, readStackSymbol, action: action === 'P' ? 'Push' : action === 'p' ? 'Pop' : 'None', actionStackSymbol });
 			}
 
 			from.transitions.push({ conditions, from, to });
@@ -1006,7 +1129,7 @@ export class Engine {
 						(condition) => `<transition>
 			<from>${nodeToIndex.get(transition.from)}</from>
 			<to>${nodeToIndex.get(transition.to)}</to>
-			<read>${condition}</read>
+			${condition === EPSILON ? '<read />' : `<read>${condition}</read>`}
 		</transition>`
 					)
 					.join('\n\t\t')
